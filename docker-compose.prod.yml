@@ -1,0 +1,94 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: proofhub-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-proofhub}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-proofhub}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-proofhub}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: proofhub-redis-prod
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD}', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: ./packages/backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: proofhub-backend-prod
+    restart: always
+    env_file:
+      - ./packages/backend/.env.production
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER:-proofhub}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-proofhub}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/app/uploads
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: ./packages/frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: proofhub-frontend-prod
+    restart: always
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:alpine
+    container_name: proofhub-nginx-prod
+    restart: always
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/dhparam.pem:/etc/nginx/dhparam.pem:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_uploads:
+
+networks:
+  internal:
+    driver: bridge
