@@ -156,7 +156,7 @@ export async function login(input: LoginInput) {
   const accessToken = generateAccessToken(jwtPayload);
   const refreshToken = generateRefreshToken(jwtPayload);
 
-  await redis.set(
+  await safeRedisSet(
     `${REFRESH_TOKEN_PREFIX}${user.id}`,
     refreshToken,
     'EX',
