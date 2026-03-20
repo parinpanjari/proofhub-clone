@@ -11,6 +11,7 @@ import { authRouter } from './modules/auth/auth.router';
 import { organizationsRouter } from './modules/organizations/organizations.router';
 
 const app = express();
+app.set('trust proxy', 1);
 
 // Ensure upload directory exists
 const uploadDir = path.resolve(env.UPLOAD_DIR);
